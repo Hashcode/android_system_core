@@ -95,6 +95,8 @@ static time_t process_needs_restart;
 
 static const char *ENV[32];
 
+static unsigned emmc_boot = 0;
+
 /* add_environment - add "key=value" to the current environment */
 int add_environment(const char *key, const char *val)
 {
@@ -468,12 +470,16 @@ static void import_kernel_nv(char *name, int in_qemu)
             strlcpy(bootloader, value, sizeof(bootloader));
         } else if (!strcmp(name,"androidboot.hardware")) {
             strlcpy(hardware, value, sizeof(hardware));
+        } else if (!strcmp(name,"androidboot.emmc")) {
+            if (!strcmp(value,"true")) {
+                emmc_boot = 1;
+            }
+        }
 #ifdef USE_MOTOROLA_CODE
         } else if (!strcmp(name,"mem")) {
             strlcpy(memsize, value, sizeof(memsize));
 #endif
-        }
-    } else {
+     } else {
         /* in the emulator, export any kernel option with the
          * ro.kernel. prefix */
         char  buff[32];
@@ -638,6 +644,7 @@ static int set_init_properties_action(int nargs, char **args)
     property_set("ro.hardware", hardware);
     snprintf(tmp, PROP_VALUE_MAX, "%d", revision);
     property_set("ro.revision", tmp);
+    property_set("ro.emmc",emmc_boot ? "1" : "0");
 
 #ifdef USE_MOTOROLA_CODE
     if(strstr(memsize, "512M"))
@@ -705,6 +712,25 @@ static int bootchart_init_action(int nargs, char **args)
 }
 #endif
 
+static int charging_mode_booting(void)
+{
+#ifndef BOARD_CHARGING_MODE_BOOTING_LPM
+	return 0;
+#else
+	int f;
+	char cmb;
+	f = open(BOARD_CHARGING_MODE_BOOTING_LPM, O_RDONLY);
+	if (f < 0)
+		return 0;
+
+	if (1 != read(f, (void *)&cmb,1))
+		return 0;
+
+	close(f);
+	return ('1' == cmb);
+#endif
+}
+
 int main(int argc, char **argv)
 {
     int fd_count = 0;
@@ -760,15 +786,28 @@ int main(int argc, char **argv)
 #endif
 
     INFO("reading config file\n");
-    init_parse_config_file("/init.rc");
+
+    if (!charging_mode_booting())
+       init_parse_config_file("/init.rc");
+    else
+       init_parse_config_file("/lpm.rc");
 
     /* pull the kernel commandline and ramdisk properties file in */
     import_kernel_cmdline(0, import_kernel_nv);
     /* don't expose the raw commandline to nonpriv processes */
     chmod("/proc/cmdline", 0440);
-    get_hardware_name(hardware, &revision);
-    snprintf(tmp, sizeof(tmp), "/init.%s.rc", hardware);
-    init_parse_config_file(tmp);
+
+    if (!charging_mode_booting()) {
+         get_hardware_name(hardware, &revision);
+         snprintf(tmp, sizeof(tmp), "/init.%s.rc", hardware);
+         init_parse_config_file(tmp);
+    }
+
+    /* Check for a target specific initialisation file and read if present */
+    if (access("/init.target.rc", R_OK) == 0) {
+        INFO("Reading target specific config file");
+            init_parse_config_file("/init.target.rc");
+    }
 
     action_for_each_trigger("early-init", action_add_queue_tail);
 
@@ -795,7 +834,11 @@ int main(int argc, char **argv)
     /* skip mounting filesystems in charger mode */
     if (strcmp(bootmode, "charger") != 0) {
         action_for_each_trigger("early-fs", action_add_queue_tail);
+    if(emmc_boot) {
+        action_for_each_trigger("emmc-fs", action_add_queue_tail);
+    } else {
         action_for_each_trigger("fs", action_add_queue_tail);
+    }
         action_for_each_trigger("post-fs", action_add_queue_tail);
         action_for_each_trigger("post-fs-data", action_add_queue_tail);
     }

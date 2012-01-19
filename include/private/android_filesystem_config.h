@@ -77,7 +77,11 @@
 #define AID_NET_BW_ACCT   3007  /* change bandwidth statistics accounting */
 #define AID_QCOM_ONCRPC   3008  /* can read/write /dev/oncrpc files */
 
+<<<<<<< HEAD
 //#ifdef USE_MOTOROLA_USERS
+=======
+#ifdef USE_MOTOROLA_USERS
+>>>>>>> 485d7f95cb867a93db0146f84d5ac8f991485880
 #define AID_MOT_OSH       5000  /* OSH */
 #define AID_MOT_ACCY      9000  /* access to accessory */
 #define AID_MOT_PWRIC     9001  /* power IC */
@@ -91,7 +95,11 @@
 #define AID_MOT_WHISPER   9009  /* Whisper Protocol access */
 #define AID_MOT_CAIF      9010  /* can create CAIF sockets */
 #define AID_MOT_DLNA      9011  /*DLNA native */
+<<<<<<< HEAD
 //#endif
+=======
+#endif
+>>>>>>> 485d7f95cb867a93db0146f84d5ac8f991485880
 
 #define AID_MISC          9998  /* access to misc storage */
 #define AID_NOBODY        9999
